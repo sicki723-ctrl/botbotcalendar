@@ -254,12 +254,7 @@ def get_events_router(event_service: EventService) -> Router:
             await callback.answer("Некорректное действие", show_alert=True)
             return
 
-        try:
-            event_id = int(parts[1])
-        except ValueError:
-            await callback.answer("Некорректный ID события", show_alert=True)
-            return
-
+        event_id = int(parts[1])
         item = await event_service.get_event_for_user(callback.from_user.id, event_id)
         if item is None:
             await callback.answer("Событие уже удалено или недоступно", show_alert=True)
@@ -277,12 +272,7 @@ def get_events_router(event_service: EventService) -> Router:
             await callback.answer("Некорректное действие", show_alert=True)
             return
 
-        try:
-            event_id = int(parts[1])
-        except ValueError:
-            await callback.answer("Некорректный ID события", show_alert=True)
-            return
-
+        event_id = int(parts[1])
         item = await event_service.get_event_for_user(callback.from_user.id, event_id)
         if item is None:
             await callback.answer("Событие уже удалено или недоступно", show_alert=True)
@@ -301,12 +291,7 @@ def get_events_router(event_service: EventService) -> Router:
             await callback.answer("Некорректное действие", show_alert=True)
             return
 
-        try:
-            event_id = int(parts[1])
-        except ValueError:
-            await callback.answer("Некорректный ID события", show_alert=True)
-            return
-
+        event_id = int(parts[1])
         result = await event_service.delete_event(callback.from_user.id, event_id)
         if not result:
             await callback.answer("Событие уже удалено или недоступно", show_alert=True)
@@ -322,12 +307,7 @@ def get_events_router(event_service: EventService) -> Router:
             await callback.answer("Некорректное действие", show_alert=True)
             return
 
-        try:
-            event_id = int(parts[1])
-        except ValueError:
-            await callback.answer("Некорректный ID события", show_alert=True)
-            return
-
+        event_id = int(parts[1])
         item = await event_service.get_event_for_user(callback.from_user.id, event_id)
         if item is None:
             await callback.answer("Событие уже удалено или недоступно", show_alert=True)
@@ -342,12 +322,7 @@ def get_events_router(event_service: EventService) -> Router:
 
     @router.callback_query(F.data.startswith("edit_title:"))
     async def edit_title_start(callback: CallbackQuery, state: FSMContext) -> None:
-        parts = _parse_callback_parts(callback.data, "edit_title", 2)
-        if parts is None:
-            await callback.answer("Некорректное действие", show_alert=True)
-            return
-
-        event_id = int(parts[1])
+        event_id = int(_parse_callback_parts(callback.data, "edit_title", 2)[1])
         item = await event_service.get_event_for_user(callback.from_user.id, event_id)
         if item is None:
             await callback.answer("Событие уже удалено или недоступно", show_alert=True)
@@ -376,23 +351,12 @@ def get_events_router(event_service: EventService) -> Router:
             await message.answer(f"Название слишком длинное. Максимум {MAX_TITLE_LENGTH} символов.")
             return
 
-        updated = await event_service.update_event_field(
-            telegram_id=message.from_user.id,
-            event_id=int(event_id),
-            field_name="title",
-            value=title,
-        )
+        await event_service.update_event_field(message.from_user.id, int(event_id), "title", title)
         await state.clear()
-
-        if not updated:
-            await message.answer("Не удалось обновить событие. Возможно, оно уже удалено.")
-            return
-
         item = await event_service.get_event_for_user(message.from_user.id, int(event_id))
         if item is None:
             await message.answer("Событие больше недоступно.")
             return
-
         event, next_date = item
         await message.answer(
             "Название обновлено.\n\n" + build_event_details_text(event, next_date, REPEAT_RU_LABELS),
@@ -401,12 +365,7 @@ def get_events_router(event_service: EventService) -> Router:
 
     @router.callback_query(F.data.startswith("edit_date:"))
     async def edit_date_start(callback: CallbackQuery, state: FSMContext) -> None:
-        parts = _parse_callback_parts(callback.data, "edit_date", 2)
-        if parts is None:
-            await callback.answer("Некорректное действие", show_alert=True)
-            return
-
-        event_id = int(parts[1])
+        event_id = int(_parse_callback_parts(callback.data, "edit_date", 2)[1])
         item = await event_service.get_event_for_user(callback.from_user.id, event_id)
         if item is None:
             await callback.answer("Событие уже удалено или недоступно", show_alert=True)
@@ -427,39 +386,128 @@ def get_events_router(event_service: EventService) -> Router:
             await message.answer("Сессия редактирования завершена. Повторите действие.")
             return
 
-        raw_date = (message.text or "").strip()
-        try:
-            event_date = parse_user_date(raw_date)
-        except ValueError:
-            await message.answer("Неверный формат даты. Пример: 20.07.2026")
-            return
-
+        event_date = parse_user_date((message.text or "").strip())
         today = datetime.now(ZoneInfo(event_service.timezone_name)).date()
         if event_date < today:
             await message.answer("Дата не может быть в прошлом. Введите будущую дату:")
             return
 
-        updated = await event_service.update_event_field(
-            telegram_id=message.from_user.id,
-            event_id=int(event_id),
-            field_name="event_date",
-            value=event_date.isoformat(),
-        )
+        await event_service.update_event_field(message.from_user.id, int(event_id), "event_date", event_date.isoformat())
         await state.clear()
-
-        if not updated:
-            await message.answer("Не удалось обновить событие. Возможно, оно уже удалено.")
-            return
-
         item = await event_service.get_event_for_user(message.from_user.id, int(event_id))
         if item is None:
             await message.answer("Событие больше недоступно.")
             return
-
         event, next_date = item
         await message.answer(
             "Дата обновлена.\n\n" + build_event_details_text(event, next_date, REPEAT_RU_LABELS),
             reply_markup=event_actions_keyboard(event.id),
         )
+
+    @router.callback_query(F.data.startswith("edit_repeat:"))
+    async def edit_repeat_select(callback: CallbackQuery) -> None:
+        event_id = int(_parse_callback_parts(callback.data, "edit_repeat", 2)[1])
+        await callback.message.edit_text(
+            "Выберите новый тип повторения:",
+            reply_markup=repeat_type_keyboard(prefix=f"edit_set_repeat:{event_id}"),
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("edit_set_repeat:"))
+    async def edit_repeat_set(callback: CallbackQuery) -> None:
+        parts = callback.data.split(":")
+        event_id = int(parts[1])
+        repeat_type = RepeatType(parts[3])
+        await event_service.update_event_field(callback.from_user.id, event_id, "repeat_type", repeat_type.value)
+        item = await event_service.get_event_for_user(callback.from_user.id, event_id)
+        if item is None:
+            await callback.answer("Событие уже удалено или недоступно", show_alert=True)
+            return
+        event, next_date = item
+        await callback.message.edit_text(
+            "Тип повторения обновлен.\n\n" + build_event_details_text(event, next_date, REPEAT_RU_LABELS),
+            reply_markup=event_actions_keyboard(event.id),
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("edit_days:"))
+    async def edit_days_select(callback: CallbackQuery) -> None:
+        event_id = int(_parse_callback_parts(callback.data, "edit_days", 2)[1])
+        await callback.message.edit_text(
+            "Выберите, за сколько дней начинать напоминания:",
+            reply_markup=remind_before_days_keyboard(prefix=f"edit_set_days:{event_id}"),
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("edit_set_days:"))
+    async def edit_days_set(callback: CallbackQuery) -> None:
+        parts = callback.data.split(":")
+        event_id = int(parts[1])
+        remind_before_days = int(parts[3])
+        await event_service.update_event_field(callback.from_user.id, event_id, "remind_before_days", remind_before_days)
+        item = await event_service.get_event_for_user(callback.from_user.id, event_id)
+        if item is None:
+            await callback.answer("Событие уже удалено или недоступно", show_alert=True)
+            return
+        event, next_date = item
+        await callback.message.edit_text(
+            "Количество дней обновлено.\n\n" + build_event_details_text(event, next_date, REPEAT_RU_LABELS),
+            reply_markup=event_actions_keyboard(event.id),
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("edit_times:"))
+    async def edit_times_select(callback: CallbackQuery) -> None:
+        event_id = int(_parse_callback_parts(callback.data, "edit_times", 2)[1])
+        await callback.message.edit_text(
+            "Выберите, сколько раз в день отправлять напоминание:",
+            reply_markup=reminders_per_day_keyboard(prefix=f"edit_set_times:{event_id}"),
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("edit_set_times:"))
+    async def edit_times_set(callback: CallbackQuery) -> None:
+        parts = callback.data.split(":")
+        event_id = int(parts[1])
+        reminders_per_day = int(parts[3])
+        await event_service.update_event_field(callback.from_user.id, event_id, "reminders_per_day", reminders_per_day)
+        item = await event_service.get_event_for_user(callback.from_user.id, event_id)
+        if item is None:
+            await callback.answer("Событие уже удалено или недоступно", show_alert=True)
+            return
+        event, next_date = item
+        await callback.message.edit_text(
+            "Количество напоминаний обновлено.\n\n" + build_event_details_text(event, next_date, REPEAT_RU_LABELS),
+            reply_markup=event_actions_keyboard(event.id),
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("event_cancel_delete:"))
+    async def event_cancel_delete(callback: CallbackQuery) -> None:
+        event_id = int(_parse_callback_parts(callback.data, "event_cancel_delete", 2)[1])
+        item = await event_service.get_event_for_user(callback.from_user.id, event_id)
+        if item is None:
+            await callback.answer("Событие уже удалено или недоступно", show_alert=True)
+            return
+        event, next_date = item
+        await callback.message.edit_text(
+            build_event_details_text(event, next_date, REPEAT_RU_LABELS),
+            reply_markup=event_actions_keyboard(event.id),
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("edit_back_event:"))
+    async def edit_back_event(callback: CallbackQuery) -> None:
+        event_id = int(_parse_callback_parts(callback.data, "edit_back_event", 2)[1])
+        item = await event_service.get_event_for_user(callback.from_user.id, event_id)
+        if item is None:
+            await callback.answer("Событие уже удалено или недоступно", show_alert=True)
+            return
+        event, next_date = item
+        await callback.message.edit_text(
+            build_event_details_text(event, next_date, REPEAT_RU_LABELS),
+            reply_markup=event_actions_keyboard(event.id),
+        )
+        await callback.answer()
 
     return router
